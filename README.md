@@ -11,11 +11,12 @@ However, this project also includes all of the tooling and source code used to g
 POST https://d5ll82w6a5.execute-api.us-east-1.amazonaws.com/v1/subscribe
 POST https://d5ll82w6a5.execute-api.us-east-1.amazonaws.com/v1/unsubscribe
 ```
-In both methods, the API expects an `application/json` body denoting an email address:
+In both methods, the API expects a content type of `application/json` with body contents denoting an `email` address:
 ```
 { "email": "myemail@example.com" }
 ```
 The API will return an `HTTP 200` and appropriate message if succesful. A `400` will return with an appropriate message otherwise. 
+
 The recipient will then get an "Inspirational Quote of the Day" along with the quote's author in their email every day at 11:00pm UTC. 
 
 
