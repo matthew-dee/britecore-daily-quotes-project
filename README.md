@@ -7,7 +7,8 @@ However, this project also includes all of the tooling and source code used to g
 
 ## Quick Start & User Guide
 
-**This application is already deployed and ready for use! **
+**This application is already deployed and ready for use!**
+
 `https://58avgfzad1.execute-api.us-east-1.amazonaws.com/v1`
 
 There are `/subscribe` and `/unsubscribe` POST methods: 
