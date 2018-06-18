@@ -1,0 +1,12 @@
+## This compose file will generate a cloudformation.json file 
+version: '2'
+services:
+  trop_cf:
+    image: mdebord/troposphere-runtime:0.1
+    volumes:
+      - ./src/troposphere.py:/app/init.py
+      - ./src/subscribe.py:/app/subscribe.py
+      - ./src/unsubscribe.py:/app/unsubscribe.py
+      - ./src/emailer.py:/app/emailer.py
+    container_name: trop_cf_builder
+    command: python /app/init.py
