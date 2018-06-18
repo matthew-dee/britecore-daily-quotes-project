@@ -5,17 +5,23 @@ Project details and requirements: https://github.com/IntuitiveWebSolutions/PDPla
 Included in this repo is a fully created `cloudformation.yaml` as requested in the project instructions. 
 However, this project also includes all of the tooling and source code used to generate the cloudformation template from scratch.
 
-## Quick Start 
+## Quick Start & User Guide
+
 **This application is already deployed and ready for use!**
+
+`https://58avgfzad1.execute-api.us-east-1.amazonaws.com/v1`
+
+There are `/subscribe` and `/unsubscribe` POST methods: 
 ```
-POST https://d5ll82w6a5.execute-api.us-east-1.amazonaws.com/v1/subscribe
-POST https://d5ll82w6a5.execute-api.us-east-1.amazonaws.com/v1/unsubscribe
+POST https://58avgfzad1.execute-api.us-east-1.amazonaws.com/v1/subscribe
+POST https://58avgfzad1.execute-api.us-east-1.amazonaws.com/v1/unsubscribe
 ```
+
 In both methods, the API expects a content type of `application/json` with body contents denoting an `email` address:
 ```
 { "email": "myemail@example.com" }
 ```
-The API will return an `HTTP 200` and appropriate message if succesful. A `400` will return with an appropriate message otherwise. 
+The API will return an `HTTP 200` and appropriate message if succesful. A `400` will return with an appropriate message otherwise. The application will not allow you to create duplicate subscription entries for the same email address. 
 
 The recipient will then get an "Inspirational Quote of the Day" along with the quote's author in their email every day at 11:00pm UTC. 
 
