@@ -1,0 +1,375 @@
+Description: BriteCore Daily Quote API Project. Forms an API Gateway + Lambda Functions
+  + DynamoDB datastore
+Outputs:
+  ApiEndpoint:
+    Description: Endpoint for this stage of the api
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref 'EmailListApi'
+        - .execute-api.
+        - !Ref 'AWS::Region'
+        - .amazonaws.com/
+        - v1
+  emailListTableName:
+    Description: Table Name
+    Value: !Ref 'emailListTable'
+Parameters:
+  FromEmail:
+    AllowedPattern: (^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)
+    ConstraintDescription: Must be an email address
+    Description: Email address that is verified to send outbound SES emails
+    Type: String
+Resources:
+  AllowDynamoEmailList:
+    Properties:
+      Description: IAM Managed Policy to have full access to DynamoDB Email List Table
+      ManagedPolicyName: AllowDynamoEmailList
+      PolicyDocument:
+        Statement:
+          - Action:
+              - dynamodb:PutItem
+              - dynamodb:DeleteItem
+              - dynamodb:GetItem
+              - dynamodb:Scan
+            Effect: Allow
+            Resource: !GetAtt 'emailListTable.Arn'
+        Version: '2012-10-17'
+    Type: AWS::IAM::ManagedPolicy
+  AllowFullLogsPolicy:
+    Properties:
+      Description: Grants access to logs
+      ManagedPolicyName: AllowLogAccess
+      PolicyDocument:
+        Statement:
+          - Action:
+              - logs:*
+            Effect: Allow
+            Resource: arn:aws:logs:*:*:*
+        Version: '2012-10-17'
+    Type: AWS::IAM::ManagedPolicy
+  AllowSESPolicy:
+    Properties:
+      Description: Grants access to ses sending
+      ManagedPolicyName: AllowSESPolicy
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Effect: Allow
+            Resource: '*'
+        Version: '2012-10-17'
+    Type: AWS::IAM::ManagedPolicy
+  DailyEmailsRule:
+    Properties:
+      Name: DailyEmailListRule
+      ScheduleExpression: cron(0 23 * * ? *)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt 'EmailSendFunction.Arn'
+          Id: DailyEmailerTargetFunction
+    Type: AWS::Events::Rule
+  EmailListApi:
+    Properties:
+      Name: EmailListApi
+    Type: AWS::ApiGateway::RestApi
+  EmailSendFunction:
+    Properties:
+      Code:
+        ZipFile: !Join
+          - ''
+          - - "from botocore.vendored import requests\n"
+            - "from email.mime.multipart import MIMEMultipart\n"
+            - "import json\n"
+            - "import boto3\n"
+            - "import smtplib\n"
+            - "import os\n"
+            - "\n"
+            - "req_url = 'http://api.forismatic.com/api/1.0/?method=getQuote&format=json&lang=en'\n"
+            - "email_from = os.environ['email_from'] # We're using SES, so this domain\
+              \ must be validated. \n"
+            - "email_subject = 'Daily Inspirational Quote' \n"
+            - "\n"
+            - "def get_email_list(): # Connects to Dynamo and gathers the list of\
+              \ emails. \n"
+            - "    email_list = []\n"
+            - "    try:\n"
+            - "        dynamodb = boto3.resource('dynamodb')\n"
+            - "        table = dynamodb.Table('emailListTable')\n"
+            - "        dbitems = table.scan()\n"
+            - "        for item in dbitems['Items']:\n"
+            - "            email_list.append(item['email'])\n"
+            - "    except Exception, e:\n"
+            - "        print \"Failed to gather email addresses: \" + str(e)\n"
+            - "        raise SystemExit(1)\n"
+            - "    return email_list\n"
+            - "\n"
+            - "def send_emails(quote_string, email_list): # Trigger SES through Boto3\n"
+            - "    ses = boto3.client('ses')\n"
+            - "    ses.send_email(\n"
+            - "        Source=email_from,\n"
+            - "        Destination={\n"
+            - "            'ToAddresses': email_list\n"
+            - "        },\n"
+            - "        Message={\n"
+            - "            'Subject': {\n"
+            - "            'Data': email_subject,\n"
+            - "            'Charset': 'UTF-8'\n"
+            - "            },\n"
+            - "            'Body': {\n"
+            - "                'Text': {\n"
+            - "                    'Data': quote_string ,\n"
+            - "                    'Charset': 'UTF-8'\n"
+            - "                }\n"
+            - "            }\n"
+            - "        }\n"
+            - "    )\n"
+            - "\n"
+            - "def daily_quote_handler(event, context):\n"
+            - "    email_list = get_email_list() # Get our recipients\n"
+            - "    if len(email_list) > 0:       # Only if we actually have recipients\n"
+            - "        r = requests.get(req_url) # Gather the quote from 3rd party\
+              \ API\n"
+            - "        if r.status_code == 200:  # Ensure the response was good\n"
+            - "            resp = json.loads(r.text)\n"
+            - "            quote_string = resp[\"quoteText\"] + \" --\" + resp[\"\
+              quoteAuthor\"]\n"
+            - "        else:\n"
+            - "            print \"Received invalid status code \" + str(r.status_code)\
+              \ + \" from \" + req_url\n"
+            - "            raise SystemExit(1)\n"
+            - "        print quote_string\n"
+            - "        send_emails(quote_string, email_list) # Send the quote out\n"
+      Description: Sends the Daily Quote. No endpoint, runs on a schedule.
+      Environment:
+        Variables:
+          email_from: !Ref 'FromEmail'
+      FunctionName: EmailSendFunction
+      Handler: index.daily_quote_handler
+      Role: !GetAtt 'LambdaEmailSendRole.Arn'
+      Runtime: python2.7
+    Type: AWS::Lambda::Function
+  EmailSubscribeFunction:
+    Properties:
+      Code:
+        ZipFile: !Join
+          - ''
+          - - "from __future__ import print_function\n"
+            - "import boto3\n"
+            - "import json\n"
+            - "\n"
+            - "def respond(err, res=None):\n"
+            - "    return {\n"
+            - "        'statusCode': '400' if err else '200',\n"
+            - "        'body': err.message if err else json.dumps(res),\n"
+            - "        'headers': {\n"
+            - "            'Content-Type': 'application/json',\n"
+            - "        },\n"
+            - "    }\n"
+            - "\n"
+            - "def subscribe_handler(event, context):\n"
+            - "    try:\n"
+            - "        dynamodb = boto3.resource('dynamodb')\n"
+            - "        table = dynamodb.Table('emailListTable')\n"
+            - "    except Exception, e:\n"
+            - "        return respond(RuntimeError('Failed to connect to DynamoDB.\
+              \ Msg: ' + str(e)))\n"
+            - "    if 'email' in event.keys(): # Ensure we have the proper payload\n"
+            - "        email_exists = table.get_item( # Test if email already exists\
+              \ in db\n"
+            - "           Key={'email': event['email']}\n"
+            - "        )\n"
+            - "        if 'Item' not in email_exists.keys(): # Email doesn't exist,\
+              \ ok to add it\n"
+            - "            table.put_item(\n"
+            - "                Item={'email': event['email']}\n"
+            - "            )\n"
+            - "            return respond(None, \"Succesfully added \" + event['email'])\n"
+            - "        else:\n"
+            - "            return respond(ValueError(event['email'] + \" already exists\
+              \ in the mailing list\"))\n"
+            - "    else:\n"
+            - '        return respond(ValueError(''Value for email not provided''))'
+      Description: Subscribe Endpoint. Adds provided email to dynamo table
+      FunctionName: EmailSubscribeFunction
+      Handler: index.subscribe_handler
+      Role: !GetAtt 'LambdaEmailListRole.Arn'
+      Runtime: python2.7
+    Type: AWS::Lambda::Function
+  EmailUnsubscribeFunction:
+    Properties:
+      Code:
+        ZipFile: !Join
+          - ''
+          - - "from __future__ import print_function\n"
+            - "import boto3\n"
+            - "import json\n"
+            - "\n"
+            - "def respond(err, res=None):\n"
+            - "    return {\n"
+            - "        'statusCode': '400' if err else '200',\n"
+            - "        'body': err.message if err else json.dumps(res),\n"
+            - "        'headers': {\n"
+            - "            'Content-Type': 'application/json',\n"
+            - "        },\n"
+            - "    }\n"
+            - "\n"
+            - "def unsubscribe_handler(event, context):\n"
+            - "    try:\n"
+            - "        dynamodb = boto3.resource('dynamodb')\n"
+            - "        table = dynamodb.Table('emailListTable')\n"
+            - "    except Exception, e:\n"
+            - "        return respond(RuntimeError('Failed to connect to DynamoDB.\
+              \ Msg: ' + str(e)))\n"
+            - "    if 'email' in event.keys(): # Ensure we have the proper payload\n"
+            - "        email_exists = table.get_item( # Test if email already exists\
+              \ in db\n"
+            - "           Key={'email': event['email']}\n"
+            - "        )\n"
+            - "        if 'Item' in email_exists.keys(): # Email exists, delete the\
+              \ record\n"
+            - "            table.delete_item(\n"
+            - "                Key={'email': event['email']}\n"
+            - "            )\n"
+            - "            return respond(None, \"Succesfully removed \" + event['email']\
+              \ + \" from the email list.\")\n"
+            - "        else:\n"
+            - "            return respond(ValueError(event['email'] + \" does not\
+              \ exist on the list.\"))\n"
+            - "    else:\n"
+            - '        return respond(ValueError(''Value for email not provided''))'
+      Description: Unsubscribe Endpoint. Deletes provided email to dynamo table
+      FunctionName: EmailUnsubscribeFunction
+      Handler: index.unsubscribe_handler
+      Role: !GetAtt 'LambdaEmailListRole.Arn'
+      Runtime: python2.7
+    Type: AWS::Lambda::Function
+  LambdaEmailListRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - !Ref 'AllowDynamoEmailList'
+        - !Ref 'AllowFullLogsPolicy'
+      Path: /
+    Type: AWS::IAM::Role
+  LambdaEmailSendRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - !Ref 'AllowDynamoEmailList'
+        - !Ref 'AllowFullLogsPolicy'
+        - !Ref 'AllowSESPolicy'
+      Path: /
+    Type: AWS::IAM::Role
+  SubscribePermission:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt 'EmailSubscribeFunction.Arn'
+      Principal: apigateway.amazonaws.com
+    Type: AWS::Lambda::Permission
+  UnsubscribePermission:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt 'EmailUnsubscribeFunction.Arn'
+      Principal: apigateway.amazonaws.com
+    Type: AWS::Lambda::Permission
+  emailListTable:
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: emailListTable
+    Type: AWS::DynamoDB::Table
+  subscribeMethod:
+    DependsOn: EmailSubscribeFunction
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: '200'
+        Type: AWS
+        Uri: !Join
+          - ''
+          - - 'arn:aws:apigateway:'
+            - !Ref 'AWS::Region'
+            - :lambda:path/2015-03-31/functions/
+            - !GetAtt 'EmailSubscribeFunction.Arn'
+            - /invocations
+      MethodResponses:
+        - StatusCode: '200'
+      ResourceId: !Ref 'subscribeResource'
+      RestApiId: !Ref 'EmailListApi'
+    Type: AWS::ApiGateway::Method
+  subscribeResource:
+    Properties:
+      ParentId: !GetAtt 'EmailListApi.RootResourceId'
+      PathPart: subscribe
+      RestApiId: !Ref 'EmailListApi'
+    Type: AWS::ApiGateway::Resource
+  unsubscribeMethod:
+    DependsOn: EmailUnsubscribeFunction
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+          - StatusCode: '200'
+        Type: AWS
+        Uri: !Join
+          - ''
+          - - 'arn:aws:apigateway:'
+            - !Ref 'AWS::Region'
+            - :lambda:path/2015-03-31/functions/
+            - !GetAtt 'EmailUnsubscribeFunction.Arn'
+            - /invocations
+      MethodResponses:
+        - StatusCode: '200'
+      ResourceId: !Ref 'unsubscribeResource'
+      RestApiId: !Ref 'EmailListApi'
+    Type: AWS::ApiGateway::Method
+  unsubscribeResource:
+    Properties:
+      ParentId: !GetAtt 'EmailListApi.RootResourceId'
+      PathPart: unsubscribe
+      RestApiId: !Ref 'EmailListApi'
+    Type: AWS::ApiGateway::Resource
+  v1Deployment:
+    DependsOn:
+      - subscribeMethod
+      - unsubscribeMethod
+    Properties:
+      RestApiId: !Ref 'EmailListApi'
+    Type: AWS::ApiGateway::Deployment
+  v1Stage:
+    Properties:
+      DeploymentId: !Ref 'v1Deployment'
+      RestApiId: !Ref 'EmailListApi'
+      StageName: v1
+    Type: AWS::ApiGateway::Stage
+
