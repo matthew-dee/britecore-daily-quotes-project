@@ -7,9 +7,10 @@ from troposphere.iam import ManagedPolicy, Role
 from troposphere.apigateway import RestApi, Method, Resource, Integration, IntegrationResponse, MethodResponse, Deployment, Stage
 from troposphere.events import Rule, Target
 
+#API Gateway Deployment Stage
+stage_name = "v1" 
 
-# This email MUST be valided in your SES configuration.
-stage_name = "v1"
+# Table to be created
 dynamo_table_name="emailListTable"
 
 ## These don"t need adjustment if using the build script alongside docker (see readme) 
@@ -17,11 +18,13 @@ sub_src_file= "/app/subscribe.py"
 unsub_src_file= "/app/unsubscribe.py"
 emailer_src_file = "/app/emailer.py"
 
-#
 region_ref = Ref('AWS::Region')
 t = Template()
 t.add_description("BriteCore Daily Quote API Project. Forms an API Gateway + Lambda Functions + DynamoDB datastore")
 
+#
+
+# FromEmail parameter 
 from_email_param = t.add_parameter(
     Parameter(
         'FromEmail',
@@ -30,8 +33,6 @@ from_email_param = t.add_parameter(
         Type="String",
         AllowedPattern=r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)"
     ))
-
-#email_from = Ref(from_email_param)
 
 ## DynamoDB table to hold email addresses
 email_table = t.add_resource(Table(
