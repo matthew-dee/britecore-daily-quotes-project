@@ -8,8 +8,8 @@ However, this project also includes all of the tooling and source code used to g
 ## Quick Start 
 **This application is already deployed and ready for use!**
 ```
-POST https://d5ll82w6a5.execute-api.us-east-1.amazonaws.com/v1/subscribe
-POST https://d5ll82w6a5.execute-api.us-east-1.amazonaws.com/v1/unsubscribe
+POST https://58avgfzad1.execute-api.us-east-1.amazonaws.com/v1/subscribe
+POST https://58avgfzad1.execute-api.us-east-1.amazonaws.com/v1/unsubscribe
 ```
 In both methods, the API expects a content type of `application/json` with body contents denoting an `email` address:
 ```
