@@ -59,7 +59,7 @@ aws cloudformation create-stack \
 1. **From the project root**, run `./build-cloudformation.sh` - the `cloudformation.yaml` file will output in the project root. 
 
 ### Without using Docker & Docker Compose:
-1. Adjust any variable values as required (`email_from`, `region`, source file paths, etc) in `src/troposphere.py` to comply with your environment. 
+1. If needed, adjust any variable values in `src/troposphere.py` to comply with your build environment. 
 2. Ensure Python2.7 is installed 
 3. Install the Troposphere Python library (`pip install troposphere`)
 3. Execute `./src/troposphere.py` - the template code will print to screen. 
