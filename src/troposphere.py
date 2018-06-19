@@ -309,6 +309,13 @@ resource = t.add_resource(Permission(
     FunctionName=GetAtt(EmailUnsubscribeFunction, "Arn")
 ))
 
+resource = t.add_resource(Permission(
+    "SendEmailPermission",
+    Action="lambda:InvokeFunction",
+    Principal="events.amazonaws.com",
+    FunctionName=GetAtt(EmailSendFunction, "Arn")
+))
+
 # Deploy API
 deployment = t.add_resource(Deployment(
     stage_name + "Deployment",

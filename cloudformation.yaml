@@ -278,6 +278,12 @@ Resources:
         - !Ref 'AllowSESPolicy'
       Path: /
     Type: AWS::IAM::Role
+  SendEmailPermission:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt 'EmailSendFunction.Arn'
+      Principal: events.amazonaws.com
+    Type: AWS::Lambda::Permission
   SubscribePermission:
     Properties:
       Action: lambda:InvokeFunction
