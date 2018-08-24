@@ -1,4 +1,4 @@
-# BriteCore Daily Quote Programming Project
+# Daily Quote Programming Project
 
 Project details and requirements: https://github.com/IntuitiveWebSolutions/PDPlatformEngineerProject
 
